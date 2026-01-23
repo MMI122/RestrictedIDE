@@ -1,0 +1,61 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build outputs
+dist/
+build/
+out/
+
+# Native module build artifacts
+system-services/*/build/
+system-services/*/node_modules/
+*.node
+*.obj
+*.o
+*.lib
+*.exp
+
+# IDE and editor files
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs
+logs/*.log
+*.log
+npm-debug.log*
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Credentials (NEVER commit)
+*.pem
+*.key
+admin-credentials.json
+secrets.json
+
+# IDE specific
+.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# Electron builder cache
+.cache/

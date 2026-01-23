@@ -1,0 +1,81 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Install Dependencies",
+      "type": "shell",
+      "command": "npm install",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Build Native Modules",
+      "type": "shell",
+      "command": "npm run build:native",
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Build Input Control",
+      "type": "shell",
+      "command": "npm run build:input-control",
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Build Process Control",
+      "type": "shell",
+      "command": "npm run build:process-control",
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Build FS Sandbox",
+      "type": "shell",
+      "command": "npm run build:fs-sandbox",
+      "group": "build",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Run Dev",
+      "type": "shell",
+      "command": "npm run dev",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Run Tests",
+      "type": "shell",
+      "command": "npm test",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Lint",
+      "type": "shell",
+      "command": "npm run lint",
+      "group": "test",
+      "problemMatcher": ["$eslint-stylish"]
+    },
+    {
+      "label": "Package Installer",
+      "type": "shell",
+      "command": "npm run package",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Verify Build",
+      "type": "shell",
+      "command": "npm run verify",
+      "group": "test",
+      "problemMatcher": []
+    }
+  ]
+}

@@ -1,0 +1,96 @@
+{
+  "name": "restricted-ide",
+  "version": "0.1.0",
+  "description": "Secure OS-Level Restricted IDE with Policy-Driven Kiosk Enforcement",
+  "main": "ide-core/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "cross-env NODE_ENV=development electron .",
+    "dev:debug": "cross-env NODE_ENV=development DEBUG=* electron .",
+    "build": "npm run build:native && npm run build:electron",
+    "build:electron": "electron-builder",
+    "build:native": "npm run build:input-control && npm run build:process-control && npm run build:fs-sandbox",
+    "build:input-control": "cd system-services/input-control && node-gyp rebuild",
+    "build:process-control": "cd system-services/process-control && node-gyp rebuild",
+    "build:fs-sandbox": "cd system-services/fs-sandbox && node-gyp rebuild",
+    "rebuild": "electron-rebuild",
+    "test": "jest",
+    "test:unit": "jest --testPathPattern=tests/unit",
+    "test:integration": "jest --testPathPattern=tests/integration",
+    "test:e2e": "jest --testPathPattern=tests/e2e",
+    "test:policy": "jest --testPathPattern=tests/unit/policy",
+    "test:security": "jest --testPathPattern=tests/e2e/security",
+    "lint": "eslint . --ext .js,.jsx",
+    "lint:fix": "eslint . --ext .js,.jsx --fix",
+    "format": "prettier --write \"**/*.{js,jsx,json,md}\"",
+    "verify": "node scripts/verify-build.js",
+    "package": "electron-builder --win",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/restricted-ide.git"
+  },
+  "keywords": [
+    "kiosk",
+    "ide",
+    "security",
+    "electron",
+    "restricted",
+    "policy-engine"
+  ],
+  "author": "Your Team",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "electron-rebuild": "^3.2.9",
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0",
+    "node-gyp": "^10.0.1",
+    "prettier": "^3.2.0"
+  },
+  "dependencies": {
+    "electron-store": "^8.1.0",
+    "winston": "^3.11.0",
+    "bcrypt": "^5.1.1",
+    "uuid": "^9.0.0",
+    "ajv": "^8.12.0"
+  },
+  "build": {
+    "appId": "com.restricted-ide.app",
+    "productName": "Restricted IDE",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico"
+    },
+    "files": [
+      "ide-core/**/*",
+      "ide-ui/**/*",
+      "admin-panel/**/*",
+      "system-services/**/build/**/*",
+      "system-services/**/index.js",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "installer/config",
+        "to": "config"
+      }
+    ]
+  }
+}
