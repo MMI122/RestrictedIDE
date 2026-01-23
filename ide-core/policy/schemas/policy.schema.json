@@ -1,0 +1,200 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Restricted IDE Policy Schema",
+  "description": "Schema for policy configuration files",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Policy version",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "name": {
+      "type": "string",
+      "description": "Policy name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Policy description"
+    },
+    "urls": {
+      "type": "object",
+      "description": "URL access policy",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["whitelist", "blacklist"],
+          "description": "Policy mode"
+        },
+        "patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "URL patterns (glob or regex)"
+        }
+      },
+      "required": ["mode", "patterns"]
+    },
+    "keyboard": {
+      "type": "object",
+      "description": "Keyboard shortcut policy",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["whitelist", "blacklist"],
+          "description": "Policy mode"
+        },
+        "blocked": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "keys": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Key combination"
+              },
+              "reason": {
+                "type": "string",
+                "description": "Reason for blocking"
+              }
+            },
+            "required": ["keys"]
+          },
+          "description": "Blocked key combinations"
+        },
+        "allowed": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "keys": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": ["keys"]
+          },
+          "description": "Allowed key combinations"
+        }
+      },
+      "required": ["mode"]
+    },
+    "processes": {
+      "type": "object",
+      "description": "Process execution policy",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["whitelist", "blacklist"],
+          "description": "Policy mode"
+        },
+        "allowed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Allowed process names"
+        },
+        "blocked": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Blocked process names"
+        }
+      },
+      "required": ["mode"]
+    },
+    "fileAccess": {
+      "type": "object",
+      "description": "File system access policy",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["sandbox", "whitelist", "blacklist"],
+          "description": "Access mode"
+        },
+        "sandboxPath": {
+          "type": "string",
+          "description": "Sandbox root path"
+        },
+        "allowedExtensions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^\\.[a-zA-Z0-9]+$"
+          },
+          "description": "Allowed file extensions"
+        },
+        "maxFileSize": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum file size in bytes"
+        },
+        "allowedPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Additional allowed paths"
+        },
+        "deniedPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Explicitly denied paths"
+        }
+      },
+      "required": ["mode"]
+    },
+    "time": {
+      "type": "object",
+      "description": "Time-based access policy",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether time restrictions are enabled"
+        },
+        "schedule": {
+          "type": "object",
+          "properties": {
+            "startTime": {
+              "type": "string",
+              "pattern": "^([01]\\d|2[0-3]):([0-5]\\d)$",
+              "description": "Start time (HH:MM)"
+            },
+            "endTime": {
+              "type": "string",
+              "pattern": "^([01]\\d|2[0-3]):([0-5]\\d)$",
+              "description": "End time (HH:MM)"
+            },
+            "days": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 6
+              },
+              "description": "Allowed days (0=Sunday, 6=Saturday)"
+            },
+            "timezone": {
+              "type": "string",
+              "description": "Timezone"
+            }
+          }
+        }
+      }
+    }
+  },
+  "required": ["version"]
+}
