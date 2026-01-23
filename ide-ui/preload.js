@@ -61,6 +61,7 @@ const ALLOWED_CHANNELS = {
     'admin:request-exit',
     'admin:get-logs',
     'admin:clear-logs',
+    'admin:unlock-window',
   ],
   
   // System channels
@@ -82,6 +83,9 @@ const ALLOWED_CHANNELS = {
     'notify:system-message',
     'notify:session-warning',
     'notify:time-warning',
+    // --- ADDED THESE TWO LINES ---
+    'admin:request-unlock',
+    'show-admin-login'
   ],
 };
 
@@ -204,6 +208,7 @@ const exposedApi = {
     checkSession: () => ipcRenderer.invoke('admin:check-session'),
     requestExit: () => ipcRenderer.invoke('admin:request-exit'),
     getLogs: (options) => ipcRenderer.invoke('admin:get-logs', options),
+    unlockWindow: () => ipcRenderer.invoke('admin:unlock-window'),
   },
 
   /**

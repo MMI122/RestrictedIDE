@@ -1,15 +1,15 @@
 {
   "enabled": true,
-  "autoStart": true,
-  "adminAccessCombo": ["ctrl", "shift", "alt", "a"],
+  "autoStart": false, 
+  "adminAccessCombo": ["cmd", "shift", "option", "a"], 
   "adminTimeout": 300000,
-  "shellReplacement": true,
+  "shellReplacement": false,
   "disableTaskManager": true,
   "disableCtrlAltDel": true,
   "restrictedUser": {
-    "create": true,
+    "create": false,
     "username": "student",
-    "autoLogin": true
+    "autoLogin": false
   },
   "display": {
     "fullscreen": true,

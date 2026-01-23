@@ -41,7 +41,11 @@ function configure(options) {
   config.sandboxRoot = options.sandboxRoot || config.sandboxRoot;
   config.allowedExtensions = new Set(options.allowedExtensions || []);
   config.maxFileSize = options.maxFileSize || config.maxFileSize;
-  config.deniedPaths = (options.deniedPaths || []).map(p => p.toLowerCase());
+  
+  // FIXED: Filter out bad paths before processing to prevent crash
+  config.deniedPaths = (options.deniedPaths || [])
+    .filter(p => p && typeof p === 'string')
+    .map(p => p.toLowerCase());
   
   console.log('[STUB] configure called');
   console.log('[STUB] Sandbox root:', config.sandboxRoot);

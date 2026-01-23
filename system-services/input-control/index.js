@@ -1,91 +1,121 @@
 /**
- * Input Control Module - JavaScript Interface
- * 
- * This module provides the JavaScript interface to the native
- * keyboard and mouse hook implementation.
- * 
- * In development mode, this provides stub implementations.
- * In production, it loads the native C++ addon.
- * 
- * @module system-services/input-control
+ * Input Control Module - macOS "Hardened Menu" Version
+ * Removes native 'Quit' menu items to ensure blocking works.
  */
 
 'use strict';
 
-let nativeModule = null;
+// ADDED: Menu is required to manipulate the top bar
+const { globalShortcut, Menu } = require('electron');
 
-// Try to load native module
-try {
-  nativeModule = require('./build/Release/input_control.node');
-} catch (error) {
-  console.warn('Native input control module not available, using stubs');
+let registeredShortcuts = [];
+
+function toElectronAccelerator(keys) {
+  return keys.map(k => {
+    k = k.toLowerCase();
+    if (k === 'cmd' || k === 'win') return 'Command';
+    if (k === 'option' || k === 'alt') return 'Alt';
+    if (k === 'ctrl' || k === 'control') return 'Control';
+    if (k === 'shift') return 'Shift';
+    if (k === 'escape' || k === 'esc') return 'Escape';
+    return k.toUpperCase();
+  }).join('+');
 }
 
-/**
- * Initialize keyboard hook
- * @param {Function} callback - Callback for key events
- */
 function initKeyboardHook(callback) {
-  if (nativeModule && nativeModule.initKeyboardHook) {
-    return nativeModule.initKeyboardHook(callback);
-  }
-  console.log('[STUB] initKeyboardHook called');
+  console.log('[Mac] Keyboard hook initialized');
   return true;
 }
 
-/**
- * Stop keyboard hook
- */
 function stopKeyboardHook() {
-  if (nativeModule && nativeModule.stopKeyboardHook) {
-    return nativeModule.stopKeyboardHook();
-  }
-  console.log('[STUB] stopKeyboardHook called');
+  globalShortcut.unregisterAll();
+  registeredShortcuts = [];
+  console.log('[Mac] All keyboard shortcuts released');
   return true;
 }
 
-/**
- * Set blocked key combinations
- * @param {Array} combinations - Array of key combination arrays
- */
 function setBlockedCombinations(combinations) {
-  if (nativeModule && nativeModule.setBlockedCombinations) {
-    return nativeModule.setBlockedCombinations(combinations);
+  globalShortcut.unregisterAll();
+  registeredShortcuts = [];
+  
+  // --- NEW: MAC MENU HARDENING ---
+  // We replace the default menu with one that DOES NOT include "Quit"
+  if (process.platform === 'darwin') {
+      const template = [
+          {
+              label: 'RestrictedIDE',
+              submenu: [
+                  { role: 'about' },
+                  { type: 'separator' },
+                  { role: 'hide' },
+                  { role: 'hideOthers' },
+                  { role: 'unhide' },
+                  { type: 'separator' },
+                  // REMOVED: { role: 'quit' } <--- This is the key change!
+              ]
+          },
+          {
+              label: 'Edit', // Keep Edit so Copy/Paste still works
+              submenu: [
+                  { role: 'undo' },
+                  { role: 'redo' },
+                  { type: 'separator' },
+                  { role: 'cut' },
+                  { role: 'copy' },
+                  { role: 'paste' },
+                  { role: 'selectAll' }
+              ]
+          },
+          {
+              label: 'View',
+              submenu: [
+                  { role: 'reload' },
+                  { role: 'togglefullscreen' }
+              ]
+          }
+      ];
+      
+      const menu = Menu.buildFromTemplate(template);
+      Menu.setApplicationMenu(menu);
+      console.log('[Mac] Application menu hardened: "Quit" option removed');
   }
-  console.log('[STUB] setBlockedCombinations called with', combinations.length, 'combinations');
+  // -------------------------------
+
+  if (!Array.isArray(combinations)) return false;
+
+  let blockCount = 0;
+
+  combinations.forEach(item => {
+    const keys = Array.isArray(item) ? item : (item.keys || []);
+    if (keys.length === 0) return;
+
+    const accelerator = toElectronAccelerator(keys);
+    
+    try {
+      // Now that the Menu doesn't steal Cmd+Q, this should work!
+      const success = globalShortcut.register(accelerator, () => {
+        console.log(`[Security] 🚫 Blocked Key Combination: ${accelerator}`);
+      });
+
+      if (success) {
+        registeredShortcuts.push(accelerator);
+        blockCount++;
+      } else {
+        console.warn(`[Mac] Failed to register: ${accelerator}`);
+      }
+    } catch (err) {
+      console.error(`[Mac] Error registering: ${accelerator}`, err.message);
+    }
+  });
+
+  console.log(`[Mac] Successfully blocked ${blockCount} key combinations`);
   return true;
 }
 
-/**
- * Enable mouse restriction
- * @param {boolean} confineToWindow - Whether to confine mouse to window
- */
-function enableMouseRestriction(confineToWindow) {
-  if (nativeModule && nativeModule.enableMouseRestriction) {
-    return nativeModule.enableMouseRestriction(confineToWindow);
-  }
-  console.log('[STUB] enableMouseRestriction called, confineToWindow:', confineToWindow);
-  return true;
-}
-
-/**
- * Disable mouse restriction
- */
-function disableMouseRestriction() {
-  if (nativeModule && nativeModule.disableMouseRestriction) {
-    return nativeModule.disableMouseRestriction();
-  }
-  console.log('[STUB] disableMouseRestriction called');
-  return true;
-}
-
-/**
- * Check if native module is loaded
- * @returns {boolean}
- */
-function isNativeLoaded() {
-  return nativeModule !== null;
-}
+// Stubs
+function enableMouseRestriction() { return true; }
+function disableMouseRestriction() { return true; }
+function isNativeLoaded() { return false; }
 
 module.exports = {
   initKeyboardHook,

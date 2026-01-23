@@ -10,7 +10,7 @@
 
 'use strict';
 
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, screen } = require('electron');
 const path = require('path');
 const { Logger } = require('./utils/Logger');
 const { PolicyEngine } = require('./policy/PolicyEngine');
@@ -36,56 +36,47 @@ let ipcHandler = null;
 function createMainWindow() {
   logger.info('Creating main window...');
 
+  // 1. Get the exact size of the user's screen
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width, height } = primaryDisplay.bounds;
+
   const windowOptions = {
-    width: 1280,
-    height: 800,
-    minWidth: 1024,
-    minHeight: 768,
+    // 2. Force the window to use those exact dimensions
+    width: width,
+    height: height,
+    x: 0,
+    y: 0,
     
-    // Security: Start in fullscreen for kiosk mode
-    fullscreen: config.kioskMode.enabled,
-    fullscreenable: true,
+    // --- FORCE KIOSK MODE START ---
+    kiosk: true,        // Activates native Mac kiosk behavior
+    frame: false,       // Hides the "Traffic Lights"
+    titleBarStyle: 'hidden',
     
-    // Security: Disable window controls in kiosk mode
-    frame: !config.kioskMode.enabled,
-    closable: !config.kioskMode.enabled || config.kioskMode.adminCanClose,
-    minimizable: !config.kioskMode.enabled,
-    maximizable: !config.kioskMode.enabled,
-    resizable: !config.kioskMode.enabled,
+    // 3. Ensure it covers everything
+    fullscreen: true,
+    simpleFullscreen: true, // Keeps it on the same desktop (no swiping)
     
-    // Security: Keep window always on top in kiosk mode
-    alwaysOnTop: config.kioskMode.enabled,
-    
-    // Security: Disable keyboard shortcuts
-    skipTaskbar: config.kioskMode.enabled,
+    // 4. Lock it down
+    fullscreenable: false,
+    resizable: false,       // User can't resize
+    movable: false,         // User can't drag
+    minimizable: false,
+    closable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    // --- FORCE KIOSK MODE END ---
 
     webPreferences: {
-      // Security: Enable context isolation
       contextIsolation: true,
-      
-      // Security: Disable Node.js in renderer
       nodeIntegration: false,
-      
-      // Security: Enable sandbox
       sandbox: true,
-      
-      // Preload script for secure IPC
       preload: path.join(__dirname, '..', 'ide-ui', 'preload.js'),
-      
-      // Security: Disable remote module
       enableRemoteModule: false,
-      
-      // Security: Disable webview tag (we'll use iframe with restrictions)
       webviewTag: false,
-      
-      // Security: Disable dev tools in production
       devTools: config.isDevelopment,
-      
-      // Security: Disable navigation to file:// URLs
       allowRunningInsecureContent: false,
     },
     
-    // Icon
     icon: path.join(__dirname, '..', 'assets', 'icon.png'),
   };
 
@@ -201,6 +192,48 @@ function initializeRuntimeManager() {
 }
 
 /**
+ * Security: Removes the "Quit" option from the macOS system menu
+ */
+function setupSecureMenu() {
+  logger.info('Setting up secure application menu...');
+  
+  if (process.platform === 'darwin') {
+    const template = [
+      {
+        label: 'RestrictedIDE',
+        submenu: [
+          { role: 'about' },
+          { type: 'separator' },
+          { role: 'hide' },
+          { role: 'hideOthers' },
+          { role: 'unhide' },
+          { type: 'separator' },
+          // { role: 'quit' } <--- REMOVED FOR SECURITY
+        ]
+      },
+      {
+        label: 'Edit',
+        submenu: [
+          { role: 'undo' }, { role: 'redo' }, { type: 'separator' },
+          { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }
+        ]
+      },
+      {
+        label: 'View',
+        submenu: [
+          { role: 'reload' }, { role: 'togglefullscreen' }
+        ]
+      }
+    ];
+    const menu = Menu.buildFromTemplate(template);
+    Menu.setApplicationMenu(menu);
+  } else {
+    // Windows/Linux: Hide the menu bar entirely
+    Menu.setApplicationMenu(null);
+  }
+}
+
+/**
  * Application startup sequence
  */
 async function startup() {
@@ -212,6 +245,11 @@ async function startup() {
   logger.info('='.repeat(50));
 
   try {
+
+   // Step 0: Secure the Menu (PREVENT CMD+Q)
+    setupSecureMenu();
+    registerAdminShortcut();
+
     // Step 1: Initialize policy engine
     await initializePolicyEngine();
     
@@ -342,6 +380,63 @@ process.on('unhandledRejection', (reason, promise) => {
 process.on('uncaughtException', (error) => {
   logger.error('Uncaught Exception:', error);
 });
+
+/**
+ * Security: Listen for Unlock Request and restore Window Controls
+ */
+ipcMain.handle('admin:unlock-window', () => {
+  logger.info('🔓 Admin Unlock: Restoring Window Controls...');
+  
+  if (mainWindow) {
+    // 1. Disable strict Kiosk Mode
+    mainWindow.setKiosk(false);
+    mainWindow.setAlwaysOnTop(false);
+    mainWindow.setClosable(true);
+    
+    // 2. Exit Fullscreen
+    mainWindow.setFullScreen(false);
+    
+    // 3. Restore Traffic Lights (macOS specific)
+    if (process.platform === 'darwin') {
+      mainWindow.setWindowButtonVisibility(true);
+    }
+  }
+  return { success: true };
+});
+
+/**
+ * Security: Manually registers the Admin Unlock shortcut
+ * because our Input Controller is blocking normal key detection.
+ */
+function registerAdminShortcut() {
+  // 1. Get the keys from config
+  const rawKeys = config.admin.secretKeyCombo || ['cmd', 'shift', 'option', 'a'];
+  
+  // 2. Convert to Electron format (e.g. "Command+Shift+Alt+A")
+  const accelerator = rawKeys.map(k => {
+    k = k.toLowerCase();
+    if (k === 'cmd' || k === 'win') return 'Command';
+    if (k === 'option' || k === 'alt') return 'Alt';
+    if (k === 'ctrl' || k === 'control') return 'Control';
+    if (k === 'shift') return 'Shift';
+    return k.charAt(0).toUpperCase() + k.slice(1);
+  }).join('+');
+
+  logger.info(`Registering Admin Unlock Shortcut: ${accelerator}`);
+
+  // 3. Register the global listener
+  const { globalShortcut } = require('electron');
+  globalShortcut.register(accelerator, () => {
+    logger.info('🔐 Admin Unlock Sequence Detected!');
+    
+    if (mainWindow) {
+      // Send a signal to the UI to show the password prompt
+      // We try the two most common event names this project likely uses
+      mainWindow.webContents.send('admin:request-unlock'); 
+      mainWindow.webContents.send('show-admin-login');
+    }
+  });
+}
 
 module.exports = {
   getMainWindow: () => mainWindow,

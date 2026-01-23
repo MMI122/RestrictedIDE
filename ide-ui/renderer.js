@@ -534,24 +534,33 @@ function setupEventListeners() {
 /**
  * Setup notification handlers
  */
+/**
+ * Setup notification handlers
+ */
 function setupNotificationHandlers() {
-  // Policy violation notifications
+  // 1. Policy violation notifications
   api.on('notify:policy-violation', (violation) => {
     log(`Policy violation: ${violation.type} - ${violation.reason}`);
     showNotification(`Blocked: ${violation.reason}`, 'warning');
+  }); // <--- The previous block MUST end here
+
+  // 2. Admin Login Request (CORRECTLY PLACED HERE)
+  api.on('show-admin-login', () => {
+    log('🔐 Admin unlock requested');
+    showAdminLoginModal();
   });
   
-  // System messages
+  // 3. System messages
   api.on('notify:system-message', (message) => {
     showNotification(message.text, message.type || 'info');
   });
   
-  // Session warnings
+  // 4. Session warnings
   api.on('notify:session-warning', (warning) => {
     showNotification(warning.message, 'warning');
   });
   
-  // Time warnings
+  // 5. Time warnings
   api.on('notify:time-warning', (warning) => {
     showNotification(`Time remaining: ${warning.remaining} minutes`, 'warning');
   });
@@ -623,4 +632,105 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initialize);
 } else {
   initialize();
+}
+
+// ============================================
+// Admin Login Modal
+// ============================================
+
+/**
+ * Show Admin Login Modal
+ */
+function showAdminLoginModal() {
+  // Don't open if already open
+  if (document.getElementById('admin-login-modal')) return;
+
+  // Create modal HTML
+  const modal = document.createElement('div');
+  modal.id = 'admin-login-modal';
+  modal.style.cssText = `
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.7); z-index: 9999;
+    display: flex; justify-content: center; align-items: center;
+  `;
+  
+  modal.innerHTML = `
+    <div style="background: var(--bg-secondary); padding: 2rem; border-radius: 8px; width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid var(--border-color);">
+      <h2 style="margin-top: 0; color: var(--text-primary);">🔐 Admin Unlock</h2>
+      <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Enter administrator password to unlock.</p>
+      
+      <input type="password" id="admin-password" placeholder="Password" 
+        style="width: 100%; padding: 10px; margin-bottom: 1rem; background: var(--bg-primary); border: 1px solid var(--border-color); color: white; border-radius: 4px;">
+      
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button id="btn-cancel-login" style="padding: 8px 16px; background: transparent; border: 1px solid var(--border-color); color: var(--text-primary); cursor: pointer; border-radius: 4px;">Cancel</button>
+        <button id="btn-submit-login" style="padding: 8px 16px; background: var(--accent-primary); border: none; color: white; cursor: pointer; border-radius: 4px;">Unlock</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // Focus the input immediately
+  const input = document.getElementById('admin-password');
+  input.focus();
+
+  // Event Listeners
+  document.getElementById('btn-cancel-login').addEventListener('click', hideAdminLoginModal);
+  
+  document.getElementById('btn-submit-login').addEventListener('click', () => {
+    handleAdminLogin(input.value);
+  });
+
+  // Allow pressing "Enter" to submit and "Escape" to cancel
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') handleAdminLogin(input.value);
+    if (e.key === 'Escape') hideAdminLoginModal();
+  });
+}
+
+/**
+ * Hide the modal
+ */
+function hideAdminLoginModal() {
+  const modal = document.getElementById('admin-login-modal');
+  if (modal) modal.remove();
+}
+
+/**
+ * Process the login
+ */
+async function handleAdminLogin(password) {
+  if (!password) return;
+
+  try {
+    const result = await api.admin.login(password);
+    
+    if (result.success) {
+      log('✅ Admin login successful');
+      showNotification('Admin Mode Enabled', 'success');
+      state.isAdmin = true;
+      hideAdminLoginModal();
+      
+      // --- NEW CODE START ---
+      // Immediately unlock the window frame/traffic lights
+      api.admin.unlockWindow(); 
+      // --- NEW CODE END ---
+      
+      // Ask the user what they want to do
+      setTimeout(() => {
+        if (confirm('Admin Unlocked successfully.\n\nClick OK to EXIT the application.\nClick Cancel to use the app in Windowed Mode.')) {
+           api.admin.requestExit();
+        }
+      }, 100);
+      
+    } else {
+      showNotification(result.error || 'Invalid password', 'error');
+      // Shake animation or clear input could go here
+      document.getElementById('admin-password').value = '';
+    }
+  } catch (error) {
+    console.error('Login error:', error);
+    showNotification('Login failed', 'error');
+  }
 }

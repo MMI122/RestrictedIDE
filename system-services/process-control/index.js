@@ -1,22 +1,11 @@
 /**
- * Process Control Module - JavaScript Interface
- * 
- * This module provides the JavaScript interface to the native
- * process monitoring and control implementation.
- * 
- * @module system-services/process-control
+ * Process Control Module - macOS Production Implementation
+ * Connects policy-defined blacklists to the native 'ps' command
  */
 
 'use strict';
 
-let nativeModule = null;
-
-// Try to load native module
-try {
-  nativeModule = require('./build/Release/process_control.node');
-} catch (error) {
-  console.warn('Native process control module not available, using stubs');
-}
+const { exec } = require('child_process');
 
 // Store for monitoring state
 let monitoringActive = false;
@@ -25,123 +14,102 @@ let whitelist = new Set();
 let blacklist = new Set();
 let onUnauthorizedCallback = null;
 
-/**
- * Set process whitelist
- * @param {string[]} processes - Array of allowed process names
- */
 function setWhitelist(processes) {
-  if (nativeModule && nativeModule.setWhitelist) {
-    return nativeModule.setWhitelist(processes);
-  }
-  whitelist = new Set(processes.map(p => p.toLowerCase()));
-  console.log('[STUB] setWhitelist called with', processes.length, 'processes');
+  const validProcesses = (processes || []).filter(p => typeof p === 'string');
+  whitelist = new Set(validProcesses.map(p => p.toLowerCase()));
   return true;
 }
 
-/**
- * Set process blacklist
- * @param {string[]} processes - Array of blocked process names
- */
 function setBlacklist(processes) {
-  if (nativeModule && nativeModule.setBlacklist) {
-    return nativeModule.setBlacklist(processes);
-  }
-  blacklist = new Set(processes.map(p => p.toLowerCase()));
-  console.log('[STUB] setBlacklist called with', processes.length, 'processes');
+  const validProcesses = (processes || []).filter(p => typeof p === 'string');
+  blacklist = new Set(validProcesses.map(p => p.toLowerCase()));
+  console.log(`[Mac] Blacklist updated with ${blacklist.size} apps`);
   return true;
 }
 
-/**
- * Start process monitoring
- * @param {Object} options - Monitoring options
- */
+function checkProcesses() {
+  // Only run if we have things to block
+  if (blacklist.size === 0) return;
+
+  exec('/bin/ps -A -o pid=,comm=', { maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+    if (error || !stdout) return;
+
+    const lines = stdout.split('\n');
+    
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+
+      const firstSpace = trimmed.indexOf(' ');
+      if (firstSpace === -1) return;
+
+      const pid = parseInt(trimmed.substring(0, firstSpace), 10);
+      const commandPath = trimmed.substring(firstSpace + 1).toLowerCase();
+
+      // Check against blacklist
+      for (const bannedApp of blacklist) {
+        // We look for the banned app name inside the running command path
+        if (commandPath.includes(bannedApp)) {
+            // Prevent killing ourselves (the IDE) or critical system processes by accident
+            if (commandPath.includes('restricted-ide') || commandPath.includes('vscode')) continue;
+
+            console.log(`[Security] 🚨 DETECTED BANNED APP: ${bannedApp.toUpperCase()} (PID: ${pid})`);
+            
+            killProcess(pid);
+
+            if (onUnauthorizedCallback) {
+                onUnauthorizedCallback({
+                    name: bannedApp,
+                    pid: pid,
+                    path: commandPath
+                });
+            }
+        }
+      }
+    });
+  });
+}
+
 function startMonitoring(options = {}) {
-  if (nativeModule && nativeModule.startMonitoring) {
-    return nativeModule.startMonitoring(options);
-  }
-  
-  const interval = options.interval || 1000;
+  const interval = options.interval || 2000;
   onUnauthorizedCallback = options.onUnauthorized || null;
   
-  console.log('[STUB] startMonitoring called, interval:', interval);
-  
-  // Stub implementation using Node.js
+  if (monitoringActive) return true;
   monitoringActive = true;
   
-  // In a real implementation, this would use native code
-  // For stub, we just log that monitoring started
-  console.log('[STUB] Process monitoring started (stub mode - no actual monitoring)');
+  console.log('[Mac] Process monitoring started (Policy Driven)');
   
+  monitorInterval = setInterval(checkProcesses, interval);
+  checkProcesses(); 
   return true;
 }
 
-/**
- * Stop process monitoring
- */
 function stopMonitoring() {
-  if (nativeModule && nativeModule.stopMonitoring) {
-    return nativeModule.stopMonitoring();
-  }
-  
   monitoringActive = false;
   if (monitorInterval) {
     clearInterval(monitorInterval);
     monitorInterval = null;
   }
-  
-  console.log('[STUB] stopMonitoring called');
   return true;
 }
 
-/**
- * Kill a process by PID
- * @param {number} pid - Process ID
- */
 function killProcess(pid) {
-  if (nativeModule && nativeModule.killProcess) {
-    return nativeModule.killProcess(pid);
-  }
-  
-  console.log('[STUB] killProcess called for PID:', pid);
-  
   try {
-    process.kill(pid, 'SIGTERM');
+    process.kill(pid, 'SIGKILL'); 
+    console.log(`[Mac] 💀 Successfully KILLED process ${pid}`);
     return true;
   } catch (error) {
-    console.error('[STUB] Failed to kill process:', error.message);
+    if (error.code !== 'ESRCH') { // Ignore if already dead
+        console.error(`[Mac] Failed to kill process ${pid}:`, error.message);
+    }
     return false;
   }
 }
 
-/**
- * Get list of running processes
- * @returns {Array} Array of process info objects
- */
-function getRunningProcesses() {
-  if (nativeModule && nativeModule.getRunningProcesses) {
-    return nativeModule.getRunningProcesses();
-  }
-  
-  console.log('[STUB] getRunningProcesses called');
-  // Return empty array in stub mode
-  return [];
-}
-
-/**
- * Check if native module is loaded
- * @returns {boolean}
- */
-function isNativeLoaded() {
-  return nativeModule !== null;
-}
-
-/**
- * Check if monitoring is active
- * @returns {boolean}
- */
-function isMonitoring() {
-  return monitoringActive;
-}
+// Stubs
+function getRunningProcesses() { return []; }
+function isNativeLoaded() { return false; }
+function isMonitoring() { return monitoringActive; }
 
 module.exports = {
   setWhitelist,
@@ -153,3 +121,27 @@ module.exports = {
   isNativeLoaded,
   isMonitoring,
 };
+
+// ==========================================
+// TEST HELPER: Auto-start in Dev Mode
+// ==========================================
+// This forces the module to run even if the main app decides to be "nice"
+if (process.env.NODE_ENV === 'development') {
+  setTimeout(() => {
+    // Only force start if the main app hasn't set a blacklist yet
+    if (blacklist.size === 0) {
+      console.log('[Mac] 🔧 Dev Mode: Auto-populating blacklist for testing...');
+      
+      // Add the apps you want to test blocking for:
+      setBlacklist([
+        'calculator', 
+        'terminal', 
+        'activity monitor',
+        'notes',
+        'safari'
+      ]);
+      
+      startMonitoring({ interval: 1000 });
+    }
+  }, 3000); // Wait 3 seconds for app to start, then force it
+}
