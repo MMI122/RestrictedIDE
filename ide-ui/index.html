@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <!-- Security: Content Security Policy -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self';
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' data:;
+    font-src 'self';
+    connect-src 'self';
+    frame-src 'none';
+  ">
+  
+  <title>Restricted IDE</title>
+  
+  <style>
+    /* CSS Reset */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* Root Variables */
+    :root {
+      --bg-primary: #1e1e1e;
+      --bg-secondary: #252526;
+      --bg-tertiary: #2d2d2d;
+      --text-primary: #cccccc;
+      --text-secondary: #808080;
+      --accent: #007acc;
+      --accent-hover: #1c97ea;
+      --border: #3c3c3c;
+      --success: #4ec9b0;
+      --warning: #dcdcaa;
+      --error: #f14c4c;
+      --sidebar-width: 50px;
+      --panel-width: 250px;
+      --toolbar-height: 35px;
+      --statusbar-height: 22px;
+    }
+
+    /* Base Styles */
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      font-size: 13px;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+    }
+
+    /* Main Application Container */
+    #app {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Toolbar */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      height: var(--toolbar-height);
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      padding: 0 10px;
+      gap: 10px;
+    }
+
+    .toolbar-title {
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-right: auto;
+    }
+
+    .toolbar-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .toolbar-button:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    /* Main Content Area */
+    .main-content {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Activity Bar (leftmost sidebar) */
+    .activity-bar {
+      display: flex;
+      flex-direction: column;
+      width: var(--sidebar-width);
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+    }
+
+    .activity-item {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: var(--sidebar-width);
+      height: var(--sidebar-width);
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-left: 2px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .activity-item:hover {
+      color: var(--text-primary);
+    }
+
+    .activity-item.active {
+      color: var(--text-primary);
+      border-left-color: var(--accent);
+    }
+
+    .activity-item svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    /* Side Panel */
+    .side-panel {
+      width: var(--panel-width);
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      padding: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-content {
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    /* Editor Area */
+    .editor-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-primary);
+      overflow: hidden;
+    }
+
+    /* Tab Bar */
+    .tab-bar {
+      display: flex;
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+
+    .tab {
+      display: flex;
+      align-items: center;
+      padding: 8px 16px;
+      background: var(--bg-tertiary);
+      border-right: 1px solid var(--border);
+      color: var(--text-secondary);
+      cursor: pointer;
+      white-space: nowrap;
+      gap: 8px;
+    }
+
+    .tab:hover {
+      background: var(--bg-secondary);
+    }
+
+    .tab.active {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+    }
+
+    .tab-close {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      border-radius: 4px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .tab:hover .tab-close {
+      opacity: 1;
+    }
+
+    .tab-close:hover {
+      background: var(--bg-tertiary);
+    }
+
+    /* Editor Container */
+    .editor-container {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #editor {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Bottom Panel */
+    .bottom-panel {
+      height: 200px;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .bottom-panel-tabs {
+      display: flex;
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .bottom-panel-tab {
+      padding: 6px 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+    }
+
+    .bottom-panel-tab:hover {
+      color: var(--text-primary);
+    }
+
+    .bottom-panel-tab.active {
+      color: var(--text-primary);
+      border-bottom-color: var(--accent);
+    }
+
+    .bottom-panel-content {
+      flex: 1;
+      overflow: auto;
+      padding: 10px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 12px;
+    }
+
+    /* Status Bar */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      height: var(--statusbar-height);
+      background: var(--accent);
+      color: white;
+      font-size: 12px;
+      padding: 0 10px;
+    }
+
+    .status-item {
+      padding: 0 10px;
+      cursor: default;
+    }
+
+    .status-item:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .status-spacer {
+      flex: 1;
+    }
+
+    /* File Tree */
+    .file-tree {
+      padding: 5px 0;
+    }
+
+    .file-tree-item {
+      display: flex;
+      align-items: center;
+      padding: 4px 10px 4px 20px;
+      cursor: pointer;
+      color: var(--text-primary);
+    }
+
+    .file-tree-item:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .file-tree-item.selected {
+      background: var(--accent);
+    }
+
+    .file-tree-icon {
+      margin-right: 6px;
+      opacity: 0.8;
+    }
+
+    /* Welcome Screen */
+    .welcome-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-secondary);
+    }
+
+    .welcome-logo {
+      font-size: 48px;
+      margin-bottom: 20px;
+    }
+
+    .welcome-title {
+      font-size: 24px;
+      font-weight: 300;
+      color: var(--text-primary);
+      margin-bottom: 10px;
+    }
+
+    .welcome-subtitle {
+      font-size: 14px;
+      margin-bottom: 30px;
+    }
+
+    /* Notification */
+    .notification {
+      position: fixed;
+      bottom: 40px;
+      right: 20px;
+      padding: 12px 20px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      z-index: 1000;
+      animation: slideIn 0.3s ease;
+    }
+
+    .notification.error {
+      border-left: 3px solid var(--error);
+    }
+
+    .notification.warning {
+      border-left: 3px solid var(--warning);
+    }
+
+    .notification.success {
+      border-left: 3px solid var(--success);
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    /* Loading Overlay */
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: var(--bg-primary);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    .loading-text {
+      margin-top: 20px;
+      color: var(--text-secondary);
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--bg-primary);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 5px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-secondary);
+    }
+
+    /* Utility Classes */
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Initializing Restricted IDE...</div>
+  </div>
+
+  <!-- Main Application -->
+  <div id="app" class="hidden">
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <span class="toolbar-title">Restricted IDE</span>
+      <button class="toolbar-button" id="btn-new-file" title="New File">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <path d="M14 2v6h6"/>
+          <line x1="12" y1="18" x2="12" y2="12"/>
+          <line x1="9" y1="15" x2="15" y2="15"/>
+        </svg>
+      </button>
+      <button class="toolbar-button" id="btn-save" title="Save">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+          <polyline points="17 21 17 13 7 13 7 21"/>
+          <polyline points="7 3 7 8 15 8"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Activity Bar -->
+      <div class="activity-bar">
+        <div class="activity-item active" data-panel="explorer" title="Explorer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+        </div>
+        <div class="activity-item" data-panel="search" title="Search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </div>
+        <div class="activity-item" data-panel="webview" title="Web Browser">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+        </div>
+        <div class="activity-item" data-panel="settings" title="Settings" style="margin-top: auto;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Side Panel -->
+      <div class="side-panel" id="side-panel">
+        <div class="panel-header">
+          <span id="panel-title">Explorer</span>
+        </div>
+        <div class="panel-content" id="panel-content">
+          <div class="file-tree" id="file-tree">
+            <!-- File tree will be populated dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Editor Area -->
+      <div class="editor-area">
+        <!-- Tab Bar -->
+        <div class="tab-bar" id="tab-bar">
+          <!-- Tabs will be added dynamically -->
+        </div>
+
+        <!-- Editor Container -->
+        <div class="editor-container">
+          <div id="editor">
+            <!-- Welcome screen shown when no file is open -->
+            <div class="welcome-screen" id="welcome-screen">
+              <div class="welcome-logo">🔒</div>
+              <div class="welcome-title">Restricted IDE</div>
+              <div class="welcome-subtitle">Secure Development Environment</div>
+              <p>Open a file from the explorer to start coding</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom Panel -->
+        <div class="bottom-panel" id="bottom-panel">
+          <div class="bottom-panel-tabs">
+            <div class="bottom-panel-tab active" data-tab="output">Output</div>
+            <div class="bottom-panel-tab" data-tab="console">Console</div>
+          </div>
+          <div class="bottom-panel-content" id="output-content">
+            <div style="color: var(--text-secondary);">Ready.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <span class="status-item" id="status-mode">Restricted Mode</span>
+      <span class="status-spacer"></span>
+      <span class="status-item" id="status-session">Session: --</span>
+      <span class="status-item" id="status-time"></span>
+    </div>
+  </div>
+
+  <!-- Main Renderer Script -->
+  <script src="./renderer.js"></script>
+</body>
+</html>
