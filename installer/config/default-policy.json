@@ -1,0 +1,112 @@
+{
+  "version": "1.0.0",
+  "name": "Default Restrictive Policy",
+  "description": "Default security policy for Restricted IDE - blocks most escape vectors",
+  
+  "urls": {
+    "mode": "whitelist",
+    "patterns": [
+      "https://developer.mozilla.org/*",
+      "https://docs.python.org/*",
+      "https://cplusplus.com/*",
+      "https://www.w3schools.com/*",
+      "https://docs.oracle.com/javase/*",
+      "https://learn.microsoft.com/en-us/dotnet/*",
+      "https://devdocs.io/*"
+    ]
+  },
+  
+  "keyboard": {
+    "mode": "blacklist",
+    "blocked": [
+      { "keys": ["alt", "tab"], "reason": "Window switching disabled" },
+      { "keys": ["alt", "f4"], "reason": "Close window disabled" },
+      { "keys": ["alt", "escape"], "reason": "Window switching disabled" },
+      { "keys": ["ctrl", "escape"], "reason": "Start menu disabled" },
+      { "keys": ["ctrl", "shift", "escape"], "reason": "Task Manager disabled" },
+      { "keys": ["win"], "reason": "Windows key disabled" },
+      { "keys": ["win", "d"], "reason": "Show desktop disabled" },
+      { "keys": ["win", "e"], "reason": "File explorer disabled" },
+      { "keys": ["win", "r"], "reason": "Run dialog disabled" },
+      { "keys": ["win", "l"], "reason": "Lock screen disabled" },
+      { "keys": ["win", "tab"], "reason": "Task view disabled" },
+      { "keys": ["ctrl", "alt", "delete"], "reason": "Security options disabled" },
+      { "keys": ["f11"], "reason": "Fullscreen toggle disabled" },
+      { "keys": ["ctrl", "shift", "i"], "reason": "DevTools disabled" },
+      { "keys": ["f12"], "reason": "DevTools disabled" }
+    ]
+  },
+  
+  "processes": {
+    "mode": "whitelist",
+    "allowed": [
+      "restricted-ide.exe",
+      "electron.exe",
+      "node.exe"
+    ],
+    "blocked": [
+      "cmd.exe",
+      "powershell.exe",
+      "pwsh.exe",
+      "taskmgr.exe",
+      "explorer.exe",
+      "regedit.exe",
+      "mmc.exe",
+      "control.exe",
+      "msconfig.exe",
+      "notepad.exe",
+      "wordpad.exe",
+      "mspaint.exe",
+      "calc.exe",
+      "iexplore.exe",
+      "firefox.exe",
+      "chrome.exe",
+      "msedge.exe",
+      "opera.exe"
+    ]
+  },
+  
+  "fileAccess": {
+    "mode": "sandbox",
+    "sandboxPath": "%APPDATA%\\RestrictedIDE\\sandbox",
+    "allowedExtensions": [
+      ".txt", ".md", ".json",
+      ".js", ".ts", ".jsx", ".tsx",
+      ".py", ".pyw",
+      ".java", ".class",
+      ".c", ".cpp", ".h", ".hpp",
+      ".cs",
+      ".html", ".htm", ".css", ".scss", ".sass",
+      ".xml", ".yaml", ".yml",
+      ".sql",
+      ".sh", ".bat", ".ps1"
+    ],
+    "maxFileSize": 10485760,
+    "deniedPaths": [
+      "C:\\Windows",
+      "C:\\Program Files",
+      "C:\\Program Files (x86)",
+      "%USERPROFILE%\\AppData\\Local",
+      "%USERPROFILE%\\AppData\\Roaming",
+      "%SYSTEMROOT%",
+      "%WINDIR%"
+    ]
+  },
+  
+  "time": {
+    "enabled": false,
+    "schedule": {
+      "startTime": "08:00",
+      "endTime": "22:00",
+      "days": [1, 2, 3, 4, 5],
+      "timezone": "local"
+    }
+  },
+  
+  "admin": {
+    "secretKeyCombo": ["ctrl", "shift", "alt", "a"],
+    "sessionTimeout": 300000,
+    "maxLoginAttempts": 3,
+    "lockoutDuration": 300000
+  }
+}

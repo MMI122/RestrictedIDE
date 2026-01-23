@@ -1,0 +1,24 @@
+{
+  "enabled": true,
+  "autoStart": true,
+  "adminAccessCombo": ["ctrl", "shift", "alt", "a"],
+  "adminTimeout": 300000,
+  "shellReplacement": true,
+  "disableTaskManager": true,
+  "disableCtrlAltDel": true,
+  "restrictedUser": {
+    "create": true,
+    "username": "student",
+    "autoLogin": true
+  },
+  "display": {
+    "fullscreen": true,
+    "alwaysOnTop": true,
+    "disableAltTab": true
+  },
+  "startup": {
+    "delay": 0,
+    "showSplash": true,
+    "splashDuration": 3000
+  }
+}
