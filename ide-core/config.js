@@ -3,6 +3,7 @@
  * 
  * Central configuration for the application.
  * Loads from environment and config files.
+ * Cross-platform support for Windows and macOS.
  * 
  * @module ide-core/config
  */
@@ -12,14 +13,26 @@
 const path = require('path');
 const fs = require('fs');
 
+// Platform detection
+const isWindows = process.platform === 'win32';
+const isMac = process.platform === 'darwin';
+
 // Determine environment
 const isDevelopment = process.env.NODE_ENV === 'development';
+const forceKiosk = process.env.FORCE_KIOSK === 'true';  // Allow testing kiosk in dev mode
 
-// Base paths
+// Base paths - platform-specific
 const appRoot = path.join(__dirname, '..');
-const userDataPath = isDevelopment 
-  ? path.join(appRoot, 'dev-data')
-  : path.join(process.env.APPDATA || process.env.HOME, 'RestrictedIDE');
+let userDataPath;
+if (isDevelopment) {
+  userDataPath = path.join(appRoot, 'dev-data');
+} else if (isWindows) {
+  userDataPath = path.join(process.env.APPDATA || '', 'RestrictedIDE');
+} else if (isMac) {
+  userDataPath = path.join(process.env.HOME || '', 'Library', 'Application Support', 'RestrictedIDE');
+} else {
+  userDataPath = path.join(process.env.HOME || '', '.restricted-ide');
+}
 
 // Ensure user data directory exists
 if (!fs.existsSync(userDataPath)) {
@@ -75,7 +88,8 @@ const config = {
   // Kiosk mode settings
   kioskMode: {
     // Enable kiosk mode (fullscreen, locked)
-    enabled: kioskConfig.enabled ?? !isDevelopment,
+    // Can be forced in dev mode with FORCE_KIOSK=true
+    enabled: forceKiosk || (kioskConfig.enabled ?? !isDevelopment),
     
     // Allow admin to close window
     adminCanClose: true,
@@ -83,9 +97,10 @@ const config = {
     // Auto-start on boot (configured by installer)
     autoStart: kioskConfig.autoStart ?? false,
     
-    // Secret key combo to access admin panel
-    // Default: Ctrl+Shift+Alt+A
-    adminAccessCombo: kioskConfig.adminAccessCombo ?? ['ctrl', 'shift', 'alt', 'a'],
+    // Secret key combo to access admin panel (platform-specific)
+    adminAccessCombo: isWindows 
+      ? (kioskConfig.adminAccessCombo_windows ?? kioskConfig.adminAccessCombo ?? ['ctrl', 'shift', 'alt', 'a'])
+      : (kioskConfig.adminAccessCombo_darwin ?? kioskConfig.adminAccessCombo ?? ['cmd', 'shift', 'option', 'a']),
     
     // Timeout for admin panel (ms)
     adminTimeout: kioskConfig.adminTimeout ?? 300000, // 5 minutes
@@ -108,8 +123,9 @@ const config = {
   
   // Input control settings
   inputControl: {
-    // Block these key combinations
-    blockedCombinations: [
+    // Block these key combinations - platform-specific
+    blockedCombinations: isWindows ? [
+      // Windows key combinations
       ['alt', 'tab'],           // Window switching
       ['alt', 'f4'],            // Close window
       ['alt', 'escape'],        // Switch windows
@@ -121,7 +137,23 @@ const config = {
       ['win', 'r'],             // Run dialog
       ['win', 'l'],             // Lock screen
       ['ctrl', 'alt', 'delete'], // Security options
-      ['f11'],                  // Exit fullscreen (browser)
+      ['f11'],                  // Exit fullscreen
+      ['f12'],                  // DevTools
+      ['ctrl', 'shift', 'i'],   // DevTools
+    ] : [
+      // macOS key combinations
+      ['cmd', 'tab'],           // App switching
+      ['cmd', 'q'],             // Quit application
+      ['cmd', 'w'],             // Close window
+      ['cmd', 'space'],         // Spotlight
+      ['cmd', 'option', 'escape'], // Force Quit
+      ['cmd', 'h'],             // Hide window
+      ['cmd', 'm'],             // Minimize
+      ['control', 'up'],        // Mission Control
+      ['control', 'down'],      // App Expose
+      ['f11'],                  // Exit fullscreen
+      ['f12'],                  // DevTools
+      ['cmd', 'option', 'i'],   // DevTools
     ],
     
     // Mouse restriction settings
@@ -135,10 +167,10 @@ const config = {
   // Process control settings
   processControl: {
     // Interval for checking processes (ms)
-    monitorInterval: 1000,
+    monitorInterval: 2000,
     
-    // Process whitelist (besides our own)
-    whitelist: [
+/*  */    // Process whitelist - system processes that should always be allowed
+    whitelist: isWindows ? [
       'csrss.exe',
       'smss.exe',
       'services.exe',
@@ -147,18 +179,47 @@ const config = {
       'conhost.exe',
       'dwm.exe',
       'winlogon.exe',
+      'wininit.exe',
       'System',
       'Idle',
+      'restricted-ide.exe',
+      'electron.exe',
+      'node.exe',
+    ] : [
+      'kernel_task',
+      'launchd',
+      'WindowServer',
+      'restricted-ide',
+      'electron',
+      'node',
     ],
     
-    // Processes to immediately terminate
-    blacklist: [
+    // Processes to immediately terminate - platform-specific
+    blacklist: isWindows ? [
       'cmd.exe',
       'powershell.exe',
+      'pwsh.exe',
       'taskmgr.exe',
-      'explorer.exe',
       'regedit.exe',
       'mmc.exe',
+      'control.exe',
+      'notepad.exe',
+      'calc.exe',
+      'mspaint.exe',
+      'chrome.exe',
+      'firefox.exe',
+      'msedge.exe',
+      'iexplore.exe',
+    ] : [
+      'terminal',
+      'iterm2',
+      'activity monitor',
+      'console',
+      'textedit',
+      'notes',
+      'safari',
+      'google chrome',
+      'firefox',
     ],
     
     // Kill unauthorized processes
@@ -185,12 +246,19 @@ const config = {
     // Allowed read paths (besides sandbox)
     allowedReadPaths: [],
     
-    // Deny access to these paths
-    deniedPaths: [
+    // Deny access to these paths - platform-specific
+    deniedPaths: isWindows ? [
       'C:\\Windows',
       'C:\\Program Files',
       'C:\\Program Files (x86)',
       process.env.USERPROFILE,
+    ] : [
+      '/System',
+      '/Library',
+      '/Applications',
+      '/bin',
+      '/usr/bin',
+      '/sbin',
     ],
   },
   
@@ -243,6 +311,13 @@ const config = {
     
     // Lockout duration (ms)
     lockoutDuration: 300000, // 5 minutes
+    
+    // Secret key combo - platform-specific
+    secretKeyCombo: isWindows 
+      ? ['ctrl', 'shift', 'alt', 'a']
+      : ['cmd', 'shift', 'option', 'a'],
+    secretKeyCombo_windows: ['ctrl', 'shift', 'alt', 'a'],
+    secretKeyCombo_darwin: ['cmd', 'shift', 'option', 'a'],
     
     // Password requirements
     passwordMinLength: 8,

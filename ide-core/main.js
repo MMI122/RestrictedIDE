@@ -5,12 +5,14 @@
  * It initializes all system services, sets up the policy engine,
  * and creates the main application window.
  * 
+ * Cross-platform support for Windows and macOS.
+ * 
  * @module ide-core/main
  */
 
 'use strict';
 
-const { app, BrowserWindow, ipcMain, Menu, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, screen, globalShortcut, clipboard } = require('electron');
 const path = require('path');
 const { Logger } = require('./utils/Logger');
 const { PolicyEngine } = require('./policy/PolicyEngine');
@@ -18,6 +20,10 @@ const { IpcMain } = require('./ipc/IpcMain');
 const { RuntimeManager } = require('./runtime/RuntimeManager');
 const { SystemServiceManager } = require('./runtime/SystemServiceManager');
 const config = require('./config');
+
+// Platform detection
+const isWindows = process.platform === 'win32';
+const isMac = process.platform === 'darwin';
 
 // Initialize logger
 const logger = new Logger('Main');
@@ -31,40 +37,38 @@ let ipcHandler = null;
 
 /**
  * Creates the main application window with security restrictions
+ * Cross-platform: handles both Windows and macOS
  * @returns {BrowserWindow} The main browser window
  */
 function createMainWindow() {
   logger.info('Creating main window...');
 
-  // 1. Get the exact size of the user's screen
+  // Get the exact size of the user's screen
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.bounds;
 
+  // Base window options (cross-platform)
   const windowOptions = {
-    // 2. Force the window to use those exact dimensions
     width: width,
     height: height,
     x: 0,
     y: 0,
     
-    // --- FORCE KIOSK MODE START ---
-    kiosk: true,        // Activates native Mac kiosk behavior
-    frame: false,       // Hides the "Traffic Lights"
-    titleBarStyle: 'hidden',
+    // Kiosk mode settings
+    fullscreen: config.kioskMode.enabled,
+    fullscreenable: true,
     
-    // 3. Ensure it covers everything
-    fullscreen: true,
-    simpleFullscreen: true, // Keeps it on the same desktop (no swiping)
+    // Security: Disable window controls in kiosk mode
+    frame: !config.kioskMode.enabled,
+    closable: !config.kioskMode.enabled || config.kioskMode.adminCanClose,
+    minimizable: !config.kioskMode.enabled,
+    maximizable: !config.kioskMode.enabled,
+    resizable: !config.kioskMode.enabled,
+    movable: !config.kioskMode.enabled,
     
-    // 4. Lock it down
-    fullscreenable: false,
-    resizable: false,       // User can't resize
-    movable: false,         // User can't drag
-    minimizable: false,
-    closable: false,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    // --- FORCE KIOSK MODE END ---
+    // Security: Keep window always on top in kiosk mode
+    alwaysOnTop: config.kioskMode.enabled,
+    skipTaskbar: config.kioskMode.enabled,
 
     webPreferences: {
       contextIsolation: true,
@@ -79,6 +83,19 @@ function createMainWindow() {
     
     icon: path.join(__dirname, '..', 'assets', 'icon.png'),
   };
+
+  // Platform-specific kiosk mode options
+  if (config.kioskMode.enabled) {
+    if (isMac) {
+      // macOS-specific kiosk settings
+      windowOptions.kiosk = true;
+      windowOptions.titleBarStyle = 'hidden';
+      windowOptions.simpleFullscreen = true;
+    } else if (isWindows) {
+      // Windows-specific kiosk settings
+      windowOptions.kiosk = true;
+    }
+  }
 
   mainWindow = new BrowserWindow(windowOptions);
 
@@ -116,12 +133,25 @@ function createMainWindow() {
     logger.info('Window closed');
   });
 
-  // Prevent Alt+F4 in kiosk mode
+  // Prevent Alt+F4 / Cmd+Q in kiosk mode
   mainWindow.on('session-end', (event) => {
     if (config.kioskMode.enabled) {
       event.preventDefault();
     }
   });
+
+  // Security: Clear clipboard on focus to prevent pasting from outside (kiosk mode only)
+  if (config.kioskMode.enabled) {
+    // Clear clipboard on startup
+    clipboard.writeText('');
+    logger.info('[Security] Clipboard cleared on startup');
+
+    // Clear clipboard every time the window regains focus
+    mainWindow.on('focus', () => {
+      clipboard.writeText('');
+      logger.debug('[Security] Clipboard cleared on window focus');
+    });
+  }
 
   // Open DevTools in development mode
   if (config.isDevelopment && config.openDevToolsOnStart) {
@@ -192,12 +222,14 @@ function initializeRuntimeManager() {
 }
 
 /**
- * Security: Removes the "Quit" option from the macOS system menu
+ * Security: Sets up the application menu
+ * macOS: Removes "Quit" option from menu
+ * Windows: Hides menu entirely
  */
 function setupSecureMenu() {
   logger.info('Setting up secure application menu...');
   
-  if (process.platform === 'darwin') {
+  if (isMac) {
     const template = [
       {
         label: 'RestrictedIDE',
@@ -227,9 +259,11 @@ function setupSecureMenu() {
     ];
     const menu = Menu.buildFromTemplate(template);
     Menu.setApplicationMenu(menu);
+    logger.info('[Mac] Menu hardened: Quit option removed');
   } else {
     // Windows/Linux: Hide the menu bar entirely
     Menu.setApplicationMenu(null);
+    logger.info('[Win] Menu hidden');
   }
 }
 
@@ -240,6 +274,7 @@ async function startup() {
   logger.info('='.repeat(50));
   logger.info('Restricted IDE Starting...');
   logger.info(`Version: ${config.version}`);
+  logger.info(`Platform: ${isWindows ? 'Windows' : isMac ? 'macOS' : 'Linux'}`);
   logger.info(`Environment: ${config.isDevelopment ? 'Development' : 'Production'}`);
   logger.info(`Kiosk Mode: ${config.kioskMode.enabled ? 'Enabled' : 'Disabled'}`);
   logger.info('='.repeat(50));
@@ -258,6 +293,9 @@ async function startup() {
     
     // Step 3: Initialize system services (native modules)
     await initializeSystemServices();
+    
+    // Step 3.5: Re-register admin shortcut (after input-control clears shortcuts)
+    registerAdminShortcut();
     
     // Step 4: Initialize IPC handlers
     initializeIpc();
@@ -383,21 +421,22 @@ process.on('uncaughtException', (error) => {
 
 /**
  * Security: Listen for Unlock Request and restore Window Controls
+ * Cross-platform support for Windows and macOS
  */
 ipcMain.handle('admin:unlock-window', () => {
   logger.info('🔓 Admin Unlock: Restoring Window Controls...');
   
   if (mainWindow) {
-    // 1. Disable strict Kiosk Mode
+    // Disable strict Kiosk Mode
     mainWindow.setKiosk(false);
     mainWindow.setAlwaysOnTop(false);
     mainWindow.setClosable(true);
     
-    // 2. Exit Fullscreen
+    // Exit Fullscreen
     mainWindow.setFullScreen(false);
     
-    // 3. Restore Traffic Lights (macOS specific)
-    if (process.platform === 'darwin') {
+    // Platform-specific: Restore window controls
+    if (isMac) {
       mainWindow.setWindowButtonVisibility(true);
     }
   }
@@ -406,16 +445,24 @@ ipcMain.handle('admin:unlock-window', () => {
 
 /**
  * Security: Manually registers the Admin Unlock shortcut
- * because our Input Controller is blocking normal key detection.
+ * Cross-platform: Uses different key combos for Windows and macOS
  */
 function registerAdminShortcut() {
-  // 1. Get the keys from config
-  const rawKeys = config.admin.secretKeyCombo || ['cmd', 'shift', 'option', 'a'];
+  // Get platform-specific keys from config
+  let rawKeys;
+  if (isWindows && config.admin.secretKeyCombo_windows) {
+    rawKeys = config.admin.secretKeyCombo_windows;
+  } else if (isMac && config.admin.secretKeyCombo_darwin) {
+    rawKeys = config.admin.secretKeyCombo_darwin;
+  } else {
+    rawKeys = config.admin.secretKeyCombo || (isWindows ? ['ctrl', 'shift', 'alt', 'a'] : ['cmd', 'shift', 'option', 'a']);
+  }
   
-  // 2. Convert to Electron format (e.g. "Command+Shift+Alt+A")
+  // Convert to Electron accelerator format
   const accelerator = rawKeys.map(k => {
     k = k.toLowerCase();
-    if (k === 'cmd' || k === 'win') return 'Command';
+    if (k === 'cmd' || k === 'command') return isMac ? 'Command' : 'Control';
+    if (k === 'win') return isWindows ? 'Super' : 'Command';
     if (k === 'option' || k === 'alt') return 'Alt';
     if (k === 'ctrl' || k === 'control') return 'Control';
     if (k === 'shift') return 'Shift';
@@ -424,18 +471,28 @@ function registerAdminShortcut() {
 
   logger.info(`Registering Admin Unlock Shortcut: ${accelerator}`);
 
-  // 3. Register the global listener
-  const { globalShortcut } = require('electron');
-  globalShortcut.register(accelerator, () => {
+  // Unregister first in case it's already registered
+  try {
+    globalShortcut.unregister(accelerator);
+  } catch (e) {
+    // Ignore
+  }
+
+  // Register the global listener
+  const success = globalShortcut.register(accelerator, () => {
     logger.info('🔐 Admin Unlock Sequence Detected!');
     
     if (mainWindow) {
-      // Send a signal to the UI to show the password prompt
-      // We try the two most common event names this project likely uses
       mainWindow.webContents.send('admin:request-unlock'); 
       mainWindow.webContents.send('show-admin-login');
     }
   });
+
+  if (success) {
+    logger.info(`✅ Admin shortcut registered successfully: ${accelerator}`);
+  } else {
+    logger.error(`❌ Failed to register admin shortcut: ${accelerator}`);
+  }
 }
 
 module.exports = {

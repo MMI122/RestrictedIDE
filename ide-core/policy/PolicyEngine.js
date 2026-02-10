@@ -97,13 +97,15 @@ class PolicyEngine {
    * @private
    */
   async loadPolicies() {
-    // Load default policy first
+    // Load default policy first (from code)
     let defaultPolicy = this.getDefaultPolicy();
     
+    // Load and MERGE policy file (deep merge, so good defaults aren't lost)
     try {
       if (fs.existsSync(config.policy.defaultPolicyPath)) {
         const content = fs.readFileSync(config.policy.defaultPolicyPath, 'utf8');
-        defaultPolicy = { ...defaultPolicy, ...JSON.parse(content) };
+        const filePolicyData = JSON.parse(content);
+        defaultPolicy = this.mergePolicies(defaultPolicy, filePolicyData);
         logger.info('Loaded default policy from file');
       }
     } catch (error) {
@@ -199,6 +201,7 @@ class PolicyEngine {
 
   /**
    * Merge two policies (deep merge)
+   * Skip empty strings and null values - don't override valid base values
    * @private
    * @param {Object} base - Base policy
    * @param {Object} override - Override policy
@@ -208,10 +211,17 @@ class PolicyEngine {
     const result = { ...base };
     
     for (const key of Object.keys(override)) {
-      if (override[key] !== null && typeof override[key] === 'object' && !Array.isArray(override[key])) {
-        result[key] = this.mergePolicies(base[key] || {}, override[key]);
+      const value = override[key];
+      
+      // Skip empty strings and null - don't override good base values
+      if (value === null || value === '' || value === undefined) {
+        continue;
+      }
+      
+      if (typeof value === 'object' && !Array.isArray(value)) {
+        result[key] = this.mergePolicies(base[key] || {}, value);
       } else {
-        result[key] = override[key];
+        result[key] = value;
       }
     }
     
@@ -223,6 +233,9 @@ class PolicyEngine {
    * @private
    */
   initializeRules() {
+    // Debug: log the fileAccess config to see sandboxPath
+    logger.debug('FileAccess policy config:', JSON.stringify(this.policy.fileAccess, null, 2));
+    
     this.rules.set('url', new UrlRule(this.policy.urls));
     this.rules.set('keyboard', new KeyboardRule(this.policy.keyboard));
     this.rules.set('process', new ProcessRule(this.policy.processes));
@@ -290,7 +303,7 @@ class PolicyEngine {
    * Validate file access against policy
    * @param {string} filePath - File path
    * @param {string} operation - Operation type (read, write, delete)
-   * @returns {boolean} Whether access is allowed
+   * @returns {Object} Validation result { allowed: boolean, reason?: string }
    */
   validateFileAccess(filePath, operation = 'read') {
     const rule = this.rules.get('fileAccess');
@@ -302,7 +315,7 @@ class PolicyEngine {
       this.notifyViolation('fileAccess', { filePath, operation }, result.reason);
     }
     
-    return result.allowed;
+    return result; // Return full result object, not just allowed boolean
   }
 
   /**

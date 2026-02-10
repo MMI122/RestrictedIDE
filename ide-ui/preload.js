@@ -77,6 +77,13 @@ const ALLOWED_CHANNELS = {
     'runtime:get-session',
   ],
   
+  // Code execution channels
+  code: [
+    'code:run',
+    'code:stop',
+    'code:input',
+  ],
+  
   // Notification channels (receive only)
   receive: [
     'notify:policy-violation',
@@ -85,7 +92,9 @@ const ALLOWED_CHANNELS = {
     'notify:time-warning',
     // --- ADDED THESE TWO LINES ---
     'admin:request-unlock',
-    'show-admin-login'
+    'show-admin-login',
+    'notify:code-output',
+    'notify:code-exit',
   ],
 };
 
@@ -98,6 +107,7 @@ const ALL_INVOKE_CHANNELS = [
   ...ALLOWED_CHANNELS.admin,
   ...ALLOWED_CHANNELS.system,
   ...ALLOWED_CHANNELS.runtime,
+  ...ALLOWED_CHANNELS.code,
 ];
 
 /**
@@ -225,6 +235,25 @@ const exposedApi = {
   runtime: {
     getState: () => ipcRenderer.invoke('runtime:get-state'),
     getSession: () => ipcRenderer.invoke('runtime:get-session'),
+  },
+
+  /**
+   * Code Execution API (Secure - no shell access)
+   */
+  code: {
+    run: (filePath) => ipcRenderer.invoke('code:run', filePath),
+    stop: () => ipcRenderer.invoke('code:stop'),
+    sendInput: (text) => ipcRenderer.invoke('code:input', text),
+    onOutput: (callback) => {
+      const subscription = (event, data) => callback(data);
+      ipcRenderer.on('notify:code-output', subscription);
+      return () => ipcRenderer.removeListener('notify:code-output', subscription);
+    },
+    onExit: (callback) => {
+      const subscription = (event, data) => callback(data);
+      ipcRenderer.on('notify:code-exit', subscription);
+      return () => ipcRenderer.removeListener('notify:code-exit', subscription);
+    },
   },
 };
 

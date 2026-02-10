@@ -74,12 +74,21 @@ const IpcChannels = {
   RUNTIME_GET_SESSION: 'runtime:get-session',
 
   // ============================================
+  // Code execution channels
+  // ============================================
+  CODE_RUN: 'code:run',
+  CODE_STOP: 'code:stop',
+  CODE_INPUT: 'code:input',
+
+  // ============================================
   // Notification channels (main to renderer)
   // ============================================
   NOTIFY_POLICY_VIOLATION: 'notify:policy-violation',
   NOTIFY_SYSTEM_MESSAGE: 'notify:system-message',
   NOTIFY_SESSION_WARNING: 'notify:session-warning',
   NOTIFY_TIME_WARNING: 'notify:time-warning',
+  NOTIFY_CODE_OUTPUT: 'notify:code-output',
+  NOTIFY_CODE_EXIT: 'notify:code-exit',
 };
 
 /**

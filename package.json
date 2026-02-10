@@ -7,6 +7,7 @@
     "start": "electron .",
     "dev": "cross-env NODE_ENV=development electron .",
     "dev:debug": "cross-env NODE_ENV=development DEBUG=* electron .",
+    "dev:kiosk": "cross-env NODE_ENV=development FORCE_KIOSK=true electron .",
     "build": "npm run build:native && npm run build:electron",
     "build:electron": "electron-builder",
     "build:native": "npm run build:input-control && npm run build:process-control && npm run build:fs-sandbox",

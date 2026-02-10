@@ -46,6 +46,10 @@ tmp/
 temp/
 *.tmp
 
+# Sandbox user files (created during testing)
+dev-data/sandbox/
+*.exe
+
 # Credentials (NEVER commit)
 *.pem
 *.key

@@ -1,11 +1,15 @@
 /**
- * Process Control Module - macOS Production Implementation
- * Connects policy-defined blacklists to the native 'ps' command
+ * Process Control Module - Cross-Platform Implementation
+ * Supports both Windows and macOS
  */
 
 'use strict';
 
 const { exec } = require('child_process');
+
+// Detect platform
+const isWindows = process.platform === 'win32';
+const isMac = process.platform === 'darwin';
 
 // Store for monitoring state
 let monitoringActive = false;
@@ -23,12 +27,62 @@ function setWhitelist(processes) {
 function setBlacklist(processes) {
   const validProcesses = (processes || []).filter(p => typeof p === 'string');
   blacklist = new Set(validProcesses.map(p => p.toLowerCase()));
-  console.log(`[Mac] Blacklist updated with ${blacklist.size} apps`);
+  console.log(`[${isWindows ? 'Win' : 'Mac'}] Blacklist updated with ${blacklist.size} apps`);
   return true;
 }
 
-function checkProcesses() {
-  // Only run if we have things to block
+/**
+ * Check running processes - Windows version
+ */
+function checkProcessesWindows() {
+  if (blacklist.size === 0) return;
+
+  // Windows: Use tasklist command
+  exec('tasklist /FO CSV /NH', { maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+    if (error || !stdout) return;
+
+    const lines = stdout.split('\n');
+    
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+
+      // Parse CSV format: "process.exe","PID","Session Name","Session#","Mem Usage"
+      const match = trimmed.match(/"([^"]+)","(\d+)"/);
+      if (!match) return;
+
+      const processName = match[1].toLowerCase();
+      const pid = parseInt(match[2], 10);
+
+      // Check against blacklist
+      for (const bannedApp of blacklist) {
+        if (processName.includes(bannedApp.toLowerCase())) {
+          // Prevent killing ourselves or critical processes
+          if (processName.includes('restricted-ide') || 
+              processName.includes('electron') ||
+              processName.includes('code')) continue;
+
+          console.log(`[Security] 🚨 DETECTED BANNED APP: ${bannedApp.toUpperCase()} (PID: ${pid})`);
+          
+          killProcess(pid);
+
+          if (onUnauthorizedCallback) {
+            onUnauthorizedCallback({
+              name: bannedApp,
+              pid: pid,
+              path: processName
+            });
+          }
+        }
+      }
+    });
+  });
+}
+
+/**
+ * Check running processes - macOS version
+ */
+function checkProcessesMac() {
   if (blacklist.size === 0) return;
 
   exec('/bin/ps -A -o pid=,comm=', { maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
@@ -48,26 +102,38 @@ function checkProcesses() {
 
       // Check against blacklist
       for (const bannedApp of blacklist) {
-        // We look for the banned app name inside the running command path
         if (commandPath.includes(bannedApp)) {
-            // Prevent killing ourselves (the IDE) or critical system processes by accident
-            if (commandPath.includes('restricted-ide') || commandPath.includes('vscode')) continue;
+          // Prevent killing ourselves or critical processes
+          if (commandPath.includes('restricted-ide') || 
+              commandPath.includes('vscode') ||
+              commandPath.includes('electron')) continue;
 
-            console.log(`[Security] 🚨 DETECTED BANNED APP: ${bannedApp.toUpperCase()} (PID: ${pid})`);
-            
-            killProcess(pid);
+          console.log(`[Security] 🚨 DETECTED BANNED APP: ${bannedApp.toUpperCase()} (PID: ${pid})`);
+          
+          killProcess(pid);
 
-            if (onUnauthorizedCallback) {
-                onUnauthorizedCallback({
-                    name: bannedApp,
-                    pid: pid,
-                    path: commandPath
-                });
-            }
+          if (onUnauthorizedCallback) {
+            onUnauthorizedCallback({
+              name: bannedApp,
+              pid: pid,
+              path: commandPath
+            });
+          }
         }
       }
     });
   });
+}
+
+/**
+ * Check running processes - auto-selects based on platform
+ */
+function checkProcesses() {
+  if (isWindows) {
+    checkProcessesWindows();
+  } else {
+    checkProcessesMac();
+  }
 }
 
 function startMonitoring(options = {}) {
@@ -77,7 +143,7 @@ function startMonitoring(options = {}) {
   if (monitoringActive) return true;
   monitoringActive = true;
   
-  console.log('[Mac] Process monitoring started (Policy Driven)');
+  console.log(`[${isWindows ? 'Win' : 'Mac'}] Process monitoring started (Policy Driven)`);
   
   monitorInterval = setInterval(checkProcesses, interval);
   checkProcesses(); 
@@ -95,12 +161,24 @@ function stopMonitoring() {
 
 function killProcess(pid) {
   try {
-    process.kill(pid, 'SIGKILL'); 
-    console.log(`[Mac] 💀 Successfully KILLED process ${pid}`);
+    if (isWindows) {
+      // Windows: Use taskkill command
+      exec(`taskkill /PID ${pid} /F`, (error) => {
+        if (error) {
+          console.error(`[Win] Failed to kill process ${pid}:`, error.message);
+        } else {
+          console.log(`[Win] 💀 Successfully KILLED process ${pid}`);
+        }
+      });
+    } else {
+      // macOS/Linux: Use process.kill
+      process.kill(pid, 'SIGKILL'); 
+      console.log(`[Mac] 💀 Successfully KILLED process ${pid}`);
+    }
     return true;
   } catch (error) {
-    if (error.code !== 'ESRCH') { // Ignore if already dead
-        console.error(`[Mac] Failed to kill process ${pid}:`, error.message);
+    if (error.code !== 'ESRCH') {
+      console.error(`Failed to kill process ${pid}:`, error.message);
     }
     return false;
   }
@@ -121,27 +199,3 @@ module.exports = {
   isNativeLoaded,
   isMonitoring,
 };
-
-// ==========================================
-// TEST HELPER: Auto-start in Dev Mode
-// ==========================================
-// This forces the module to run even if the main app decides to be "nice"
-if (process.env.NODE_ENV === 'development') {
-  setTimeout(() => {
-    // Only force start if the main app hasn't set a blacklist yet
-    if (blacklist.size === 0) {
-      console.log('[Mac] 🔧 Dev Mode: Auto-populating blacklist for testing...');
-      
-      // Add the apps you want to test blocking for:
-      setBlacklist([
-        'calculator', 
-        'terminal', 
-        'activity monitor',
-        'notes',
-        'safari'
-      ]);
-      
-      startMonitoring({ interval: 1000 });
-    }
-  }, 3000); // Wait 3 seconds for app to start, then force it
-}

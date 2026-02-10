@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "name": "Default Restrictive Policy (Cross-Platform)",
-  "description": "Default security policy for Restricted IDE - auto-detects OS",
+  "name": "Default Restrictive Policy (Windows)",
+  "description": "Default security policy for Restricted IDE on Windows",
   
   "urls": {
     "mode": "whitelist",
@@ -18,7 +18,7 @@
   
   "keyboard": {
     "mode": "blacklist",
-    "blocked_windows": [
+    "blocked": [
       { "keys": ["alt", "tab"], "reason": "Window switching disabled" },
       { "keys": ["alt", "f4"], "reason": "Close window disabled" },
       { "keys": ["alt", "escape"], "reason": "Window switching disabled" },
@@ -34,36 +34,17 @@
       { "keys": ["f11"], "reason": "Fullscreen toggle disabled" },
       { "keys": ["ctrl", "shift", "i"], "reason": "DevTools disabled" },
       { "keys": ["f12"], "reason": "DevTools disabled" }
-    ],
-    "blocked_darwin": [
-      { "keys": ["cmd", "tab"], "reason": "Window switching disabled" },
-      { "keys": ["cmd", "q"], "reason": "Quit application disabled" },
-      { "keys": ["cmd", "w"], "reason": "Close window disabled" },
-      { "keys": ["cmd", "space"], "reason": "Spotlight search disabled" },
-      { "keys": ["cmd", "option", "escape"], "reason": "Force Quit disabled" },
-      { "keys": ["cmd", "h"], "reason": "Hide window disabled" },
-      { "keys": ["cmd", "m"], "reason": "Minimize window disabled" },
-      { "keys": ["control", "up"], "reason": "Mission Control disabled" },
-      { "keys": ["control", "down"], "reason": "App Expose disabled" },
-      { "keys": ["cmd", "option", "i"], "reason": "DevTools disabled" },
-      { "keys": ["f12"], "reason": "DevTools disabled" }
-    ],
-    "blocked": []
+    ]
   },
   
   "processes": {
     "mode": "whitelist",
-    "allowed_windows": [
+    "allowed": [
       "restricted-ide.exe",
       "electron.exe",
       "node.exe"
     ],
-    "allowed_darwin": [
-      "restricted-ide",
-      "electron",
-      "node"
-    ],
-    "blocked_windows": [
+    "blocked": [
       "cmd.exe",
       "powershell.exe",
       "pwsh.exe",
@@ -74,31 +55,20 @@
       "control.exe",
       "msconfig.exe",
       "notepad.exe",
+      "wordpad.exe",
+      "mspaint.exe",
+      "calc.exe",
+      "iexplore.exe",
+      "firefox.exe",
       "chrome.exe",
       "msedge.exe",
-      "firefox.exe"
-    ],
-    "blocked_darwin": [
-      "terminal",
-      "iterm",
-      "activity monitor",
-      "console",
-      "finder",
-      "system settings",
-      "textedit",
-      "safari",
-      "google chrome",
-      "firefox"
-    ],
-    "allowed": [],
-    "blocked": []
+      "opera.exe"
+    ]
   },
   
   "fileAccess": {
     "mode": "sandbox",
-    "sandboxPath_windows": "%APPDATA%\\RestrictedIDE\\sandbox",
-    "sandboxPath_darwin": "~/Library/Application Support/RestrictedIDE/sandbox",
-    "sandboxPath": "",
+    "sandboxPath": "%APPDATA%\\RestrictedIDE\\sandbox",
     "allowedExtensions": [
       ".txt", ".md", ".json",
       ".js", ".ts", ".jsx", ".tsx",
@@ -112,19 +82,15 @@
       ".sh", ".bat", ".ps1"
     ],
     "maxFileSize": 10485760,
-    "deniedPaths_windows": [
+    "deniedPaths": [
       "C:\\Windows",
       "C:\\Program Files",
-      "C:\\Program Files (x86)"
-    ],
-    "deniedPaths_darwin": [
-      "/System",
-      "/Library",
-      "/Applications",
-      "/bin",
-      "/usr/bin"
-    ],
-    "deniedPaths": []
+      "C:\\Program Files (x86)",
+      "%USERPROFILE%\\AppData\\Local",
+      "%USERPROFILE%\\AppData\\Roaming",
+      "%SYSTEMROOT%",
+      "%WINDIR%"
+    ]
   },
   
   "time": {
@@ -138,9 +104,7 @@
   },
   
   "admin": {
-    "secretKeyCombo_windows": ["ctrl", "shift", "alt", "a"],
-    "secretKeyCombo_darwin": ["cmd", "shift", "option", "a"],
-    "secretKeyCombo": [],
+    "secretKeyCombo": ["ctrl", "shift", "alt", "a"],
     "sessionTimeout": 300000,
     "maxLoginAttempts": 3,
     "lockoutDuration": 300000

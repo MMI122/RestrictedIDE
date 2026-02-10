@@ -169,7 +169,7 @@ describe('FileAccessRule', () => {
   test('blocks disallowed extensions', () => {
     const result = rule.validate('C:\\sandbox\\test.exe', 'read');
     expect(result.allowed).toBe(false);
-    expect(result.reason).toContain('Extension not allowed');
+    expect(result.reason).toContain('extension not allowed');
   });
 
   test('blocks path traversal attempts', () => {

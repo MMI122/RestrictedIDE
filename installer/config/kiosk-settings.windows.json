@@ -1,9 +1,7 @@
 {
   "enabled": true,
   "autoStart": false, 
-  "adminAccessCombo_windows": ["ctrl", "shift", "alt", "a"],
-  "adminAccessCombo_darwin": ["cmd", "shift", "option", "a"], 
-  "adminAccessCombo": [],
+  "adminAccessCombo": ["ctrl", "shift", "alt", "a"], 
   "adminTimeout": 300000,
   "shellReplacement": false,
   "disableTaskManager": true,
